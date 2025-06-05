@@ -1,0 +1,104 @@
+---
+title: "Recommender Systems in Action: Amazon vs. Ratings Platforms"
+author: "Sheriann McLarty"
+output:
+  html_document:
+    theme: flatly
+    toc: true
+    toc_depth: 2
+    toc_float: true
+    highlight: zenburn
+    number_sections: true
+date: "`r Sys.Date()`"
+---
+
+## Introduction
+In this discussion, I explore two types of recommender systems: personalized content-based systems like Amazon's co-purchase algorithm, and non-personalized platforms such as Metacritic, Rotten Tomatoes, and IMDb. I’ll also examine how collective manipulation of recommender systems can impact the user experience and how platforms can protect against abuse.
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(reticulate)
+use_python("c:/Users/sheri/anaconda3/envs/recsys_env/python.exe", required = TRUE)
+```
+
+## Personalized Recommendation: Amazon Co-Purchase System
+```{python}
+# Import libraries
+import seaborn as sns
+import matplotlib.pyplot as plt
+import pandas as pd
+import numpy as np
+
+# Set Seaborn theme
+sns.set_theme(style="whitegrid")
+
+# Simulated Amazon co-purchase scores
+products = ["Samsung Galaxy Phone Case", "Wireless Earbuds", "Portable Charger", "Screen Protector"]
+scores = [4.2, 3.8, 4.7, 4.0]
+df_amazon = pd.DataFrame({"Product": products, "Score": scores})
+
+# Bar plot
+plt.figure(figsize=(10, 6))
+ax1 = sns.barplot(x="Product", y="Score", data=df_amazon, palette="Blues_d", edgecolor="black")
+ax1.set_title("Amazon Recommender: Co-Purchased Product Scores", fontsize=14, weight='bold')
+ax1.set_xlabel("Product", fontsize=12)
+ax1.set_ylabel("Relevance Score (0–5)", fontsize=12)
+ax1.set_ylim(0, 5)
+ax1.tick_params(axis='x', rotation=15)
+for i, score in enumerate(scores):
+    ax1.text(i, score + 0.1, f"{score}", ha='center', va='bottom', fontsize=10)
+plt.tight_layout()
+plt.show()
+```
+
+**Explanation:** This bar chart visualizes simulated co-purchase scores for four Amazon products often bought together. This content-based recommendation system learns from user behavior and product features to suggest relevant items. The higher the score, the more frequently the items appear together in transactions.Two users can get different suggestions depending on their browsing and purchase history.
+
+## Non-Personalized Recommenders: Ratings Platform Comparison
+
+```{python}
+# Simulated scores for platforms
+platforms = ["Metacritic", "Rotten Tomatoes", "IMDb"]
+scores_np = [85, 90, 72]
+custom_colors = ["#66C2A5","#E03C31","#FFD700"]
+df_scores = pd.DataFrame({"Platform": platforms, "Average Score": scores_np})
+
+# Bar plot
+plt.figure(figsize=(10, 6))
+ax2 = sns.barplot(x="Platform", y="Average Score", data=df_scores, palette=custom_colors, edgecolor="black")
+ax2.set_title("Comparison of Non-Personalized Recommender Platforms", fontsize=14, weight='bold')
+ax2.set_xlabel("Platform", fontsize=12)
+ax2.set_ylabel("Average User/Critic Score (0–100)", fontsize=12)
+ax2.set_ylim(0, 100)
+for i, score in enumerate(scores_np):
+    ax2.text(i, score + 2, f"{score}", ha='center', va='bottom', fontsize=10)
+plt.tight_layout()
+plt.show()
+```
+
+**Explanation:** This chart compares three major non-personalized recommenders—Metacritic, Rotten Tomatoes, and IMDb. These systems aggregate user or critic reviews and display a general score. Unlike personalized recommenders, they don't tailor results based on individual preferences, which can lead to mixed experiences depending on user tastes.
+
+## Attacks on Recommender Systems
+In 2017, IMDb users collectively bombed The Promise with negative ratings before it even premiered, trying to sink its credibility. This is known as a shilling attack, where fake or biased inputs distort results.
+
+## Prevention Strategies:
+
+Require verified views before submitting ratings
+
+Use anomaly detection to filter rating spikes
+
+Apply hybrid models with weighted trust systems
+
+Limit influence of outlier ratings in early phases
+
+## Final Thoughts
+
+Personalized recommenders like Amazon feel intuitive and accurate but can reinforce filter bubbles. Non-personalized platforms offer broad views but can be gamed or feel impersonal. The ideal system blends both — combining human review with algorithmic nuance while protecting against manipulation.
+
+## References
+
+*ISIK, M. (n.d.). Sentiment Analysis of Amazon Reviews Using VADER. Kaggle. *https://www.kaggle.com/code/mehmetsadikisik/sentiment-analysis-of-amazon-reviews-using-vader*
+*Hutto, C. J., & Gilbert, E. (2014). VADER: A Parsimonious Rule-based Model for Sentiment Analysis. ICWSM.*
+*Linden, G., Smith, B., & York, J. (2003). Amazon.com Recommendations. IEEE Internet Computing, 7(1), 76–80.*
+*Stanford SNAP. (n.d.). Amazon Product Co-Purchasing Network. https://snap.stanford.edu/data/amazon-meta.html*
+*Andrews, T. M. (2017). IMDb Users Gang Up. The Washington Post.*
+*Metacritic. (n.d.). About Metascores. https://www.metacritic.com/about-metascores*
