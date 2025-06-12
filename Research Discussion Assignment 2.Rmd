@@ -1,0 +1,86 @@
+---
+title: "Research Discussion 2: Pandora vs. Spotify – What We Hear vs. What We Can Analyze"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+## Discussion 2: Spotify Runs Fast, Pandora Listens Deep
+
+**DATA 612 – Recommender Systems**
+
+---
+
+### 1. Introduction – The Video That Started It
+
+This discussion is based on the YouTube talk:  
+*Music Recommendations at Scale with Spark – Christopher Johnson (Spotify)*  
+[Watch it here](https://www.youtube.com/watch?v=3LBgiFch4_g)
+
+Christopher Johnson from Spotify walks through how they use Spark and ALS (Alternating Least Squares) to build their recommendation engine. It's all about scaling billions of user interactions—plays, skips, and repeats—across a massive music catalog, and doing it fast.
+
+But while watching, I kept thinking about another system that doesn’t come up much anymore—Pandora.
+
+---
+
+### 2. Spotify’s Spark-Powered ALS
+
+Spotify doesn’t use explicit feedback like ratings. Instead, it builds a giant user-song matrix based on implicit signals like listening frequency and skips. They use Spark to apply ALS, which breaks the matrix into latent factors and reconstructs missing preferences.
+
+It’s efficient, scalable, and powerful. But it’s also a little repetitive—once Spotify figures out what you like, it tends to trap you in that lane.
+
+---
+
+### 3. Pandora’s Music Genome Project
+
+Pandora went in the opposite direction.
+
+They launched the Music Genome Project in 2005. Instead of relying on user behavior, they hired trained musicians to tag each track with hundreds of musical characteristics—like genre, mood, vocal type, rhythm style, and more. Each song took 20–30 minutes to tag.
+
+So instead of saying “people who liked X also liked Y,” Pandora said, “this song sounds like the one you liked.”
+
+---
+
+### 4. Why That Still Hits
+
+Pandora avoids cold-start issues. A song could be brand new, unknown, or rarely played—but if its musical DNA matched your taste, you’d still hear it.
+
+It also surfaced music in a way that didn’t rely on popularity or crowd behavior. Sometimes, the recommendations felt more intentional and actually surprising in a good way.
+
+---
+
+### 5. But Here's the Frustrating Part
+
+As cool as Pandora's system is, it's locked tight:
+- No playlist export
+- No public API
+- No access to tagging data or listening logs
+
+So if you’re a data person (like us) who wants to analyze, play, or build anything with that info—it’s basically a no-go. Pandora's a closed vault.
+
+Spotify, on the other hand, is open:
+- Public APIs
+- Playlist export
+- Kaggle datasets
+
+---
+
+### 6. Spotify Dataset – A Quick Peek with SQL
+
+To show what’s possible with Spotify, I checked out this Kaggle dataset:  
+[Spotify Dataset for Playing Around with SQL](https://www.kaggle.com/datasets/ambaliyagati/spotify-dataset-for-playing-around-with-sql)
+
+Here’s a sample SQL query to explore the most popular non-explicit tracks by genre:
+
+```sql
+SELECT genre, COUNT(*) AS num_tracks, AVG(popularity) AS avg_popularity
+FROM spotify_tracks
+WHERE explicit = FALSE
+GROUP BY genre
+ORDER BY avg_popularity DESC
+LIMIT 5;
