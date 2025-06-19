@@ -1,0 +1,116 @@
+---
+title: 'Research Discussion 3: Bias in Recommender Systems – Healthcare Edition'
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+## Discussion 3: Recommender Systems, Bias, and Healthcare Disparities
+
+**DATA 612 – Recommender Systems**
+
+---
+
+### 1. The Bigger Picture: Bias Isn’t Just a Tech Problem—It’s a Public Health One
+
+As healthcare gets more digitized, recommendation systems aren’t just about playlists or products—they’re part of **clinical decision support**, **treatment recommendations**, and **resource allocation**.
+
+And just like in music and retail, these systems can reinforce bias—except now, it’s life-and-death. Predictive algorithms used to guide patient care often rely on historic EHR data, insurance claims, or patient-generated behavior, all of which are shaped by **systemic disparities**.
+
+If the data reflects unequal treatment, the algorithm will learn those patterns—and keep recommending more of the same.
+
+---
+
+### 2. How Healthcare Recommenders Reinforce Bias
+
+**Example: Risk Scores in Healthcare Systems**
+
+In 2019, a study published in *Science* found that a widely used risk algorithm used to allocate high-risk patients to care management programs consistently **underestimated the needs of Black patients**. The algorithm used healthcare spending as a proxy for health status, but Black patients often received less care—so they appeared “lower risk” on paper.
+
+**Example: Treatment Suggestion Tools**
+
+Recommendation tools for prescribing treatments or medications often reflect gender bias. For instance, women presenting with heart attack symptoms are less likely to be recommended for intervention—not because they don’t need it, but because historical data underrepresents those cases.
+
+---
+
+### 3. Why the Techniques Matter
+
+The recommender techniques we’ve covered—collaborative filtering, matrix factorization, and implicit feedback—all share one big risk: they’re **pattern chasers**. They reward what's already been done and seen.
+
+That means if certain patient groups (e.g., Black women, disabled patients, Medicaid recipients) have been under-treated or misdiagnosed in the past, the system will “learn” that and start recommending fewer interventions or lower-risk classifications moving forward.
+
+Even clustering or segmentation models can become a problem if they reinforce unequal categories—labeling patients by socioeconomic status, ZIP code, or past utilization without deeper context.
+
+---
+
+### 4. Are There Ways to Prevent This?
+
+Yes—but it starts with knowing how the bias shows up.
+
+To demonstrate what this might look like, I created a small simulated dataset based on CMS-style data. It shows the **referral rates for patients flagged as “high-risk”**, broken down by race. Even though the system flags these patients as needing extra care, we can see that **referrals aren't given out equally**.
+
+```{r referral-chart, dev = "CairoPNG"}
+# Simulated CMS-style disparity chart
+library(tidyverse)
+
+data <- tibble(
+  race = c("White", "Black", "Hispanic", "Asian", "Other"),
+  high_risk_patients = c(1200, 1100, 950, 600, 300),
+  referrals_given = c(900, 600, 550, 400, 150)
+)
+
+data <- data %>%
+  mutate(referral_rate = referrals_given / high_risk_patients)
+
+ggplot(data, aes(x = race, y = referral_rate)) +
+  geom_col(fill = "steelblue") +
+  geom_text(aes(label = scales::percent(referral_rate, accuracy = 1)), 
+            vjust = -0.5, size = 4) +
+  scale_y_continuous(limits = c(0.4, 0.85)) +
+  labs(
+    title = "Referral Rate by Race Among High-Risk Patients",
+    x = "Race",
+    y = "Referral Rate"
+  ) +
+  theme_minimal()
+
+```
+
+This mini dataset mirrors real-world findings from studies like the *Science* 2019 paper, where algorithms underestimated the needs of Black patients by using health spending as a proxy for risk. Here, even though all groups are flagged as high-risk, patients of color are referred at lower rates—exposing how systems built on biased patterns can quietly widen care gaps.
+
+The solution? Build fairness into the system:
+- Use **equal opportunity constraints** (like Hardt et al. 2016) to ensure consistent true positive rates across groups.
+- Audit outcomes regularly using demographic breakdowns, like the chart above.
+- Bring in **public health context**—not just predictive accuracy.
+
+We can’t fix what we won’t measure.
+
+---
+
+### 5. Final Take
+
+Healthcare recommender systems have real power, but they can just as easily reinforce the gaps we already have—unless we stop treating historical data like truth.
+
+Bias in predictive systems isn’t always loud. Sometimes it looks like the right people not getting flagged, or the “low risk” label quietly repeating itself where care was already denied. We need to be intentional, especially in healthcare, where recommendations affect treatment, survival, and quality of life.
+
+---
+
+### Resources
+
+- Hardt, M., Price, E., & Srebro, N. (2016). *Equality of Opportunity in Supervised Learning*  
+  [https://arxiv.org/abs/1610.02413](https://arxiv.org/abs/1610.02413)
+- Obermeyer, Z., Powers, B., Vogeli, C., & Mullainathan, S. (2019). *Dissecting racial bias in an algorithm used to manage the health of populations*. *Science*, 366(6464), 447–453.
+- Estola, E. (2016). *When Recommendation Systems Go Bad* – MLConf
+- Jain, R. (2016). *When Recommendation Systems Go Bad*
+
+---
+
+GitHub repo with this write-up:  
+[https://github.com/sheriannmclarty/data612_recommender_systems](https://github.com/sheriannmclarty/data612_recommender_systems)
