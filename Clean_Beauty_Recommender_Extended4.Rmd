@@ -1,0 +1,271 @@
+---
+title: "Clean Beauty Recommender Project 3: Dimensionality Reduction & Product Embeddings (A Continuation of Projects 1 & 2)"
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(Matrix)
+library(irlba)
+library(Rtsne)
+library(ggplot2)
+library(stringr)
+library(knitr)
+library(readr)
+library(cluster)
+library(factoextra)
+set.seed(2025)
+```
+
+# Introduction
+
+This project is the **third installment** of a broader recommender system series centered on clean beauty and algorithmic fairness. Building on **Project 1 (bias-aware collaborative filtering)** and **Project 2 (rule-based filtering with safety flags)**, we now shift into the **math-heavy space of dimensionality reduction** and **product similarity visualization**.
+
+Our ultimate goal is to create *product embeddings*—numerical representations of products that capture their underlying characteristics and relationships in a multi-dimensional space. These embeddings allow us to quantify similarity between products, even when they haven’t been rated by the same users.
+
+To generate these embeddings, we first apply **Truncated SVD** to uncover latent features from our user rating data. Then, to visualize these high-dimensional embeddings in an interpretable way, we use **t-SNE** to project them into a 2D space.
+
+# Load & Prepare the Dataset
+
+```{r load-data}
+df <- read_csv("filtered_skintone_reviews_r.csv")
+
+ratings_df <- df %>%
+  select(user = author_id, product = product_name_x, rating = rating_x) %>%
+  filter(!is.na(user), !is.na(product), !is.na(rating)) %>%
+  mutate(user = as.factor(user), product = as.factor(product))
+```
+
+# Create a Sparse Ratings Matrix
+
+```{r rating-matrix}
+rating_matrix <- sparseMatrix(
+  i = as.integer(ratings_df$user),
+  j = as.integer(ratings_df$product),
+  x = ratings_df$rating,
+  dimnames = list(levels(ratings_df$user), levels(ratings_df$product))
+)
+```
+
+# Apply Truncated SVD
+
+```{r svd-decompose}
+# Apply Truncated SVD
+# We use `irlba` for efficient Truncated SVD on our sparse rating matrix.
+# `nv = 50` means we're decomposing the matrix into 50 latent features,
+# balancing capturing significant patterns with computational efficiency.
+svd_result <- irlba(rating_matrix, nv = 50)
+
+# To visualize products in 2D, we project their embeddings onto the first two latent dimensions.
+# The `svd_result$v` matrix contains the product (item) embeddings, and `svd_result$d` contains
+# the singular values, which represent the importance of each dimension.
+svd_2d <- svd_result$v[, 1:2] %*% diag(svd_result$d[1:2])
+
+svd_plot_df <- data.frame(
+  product = colnames(rating_matrix),
+  X = svd_2d[, 1],
+  Y = svd_2d[, 2]
+)
+```
+
+# Visualize Product Embeddings via SVD
+
+```{r plot-svd}
+ggplot(svd_plot_df, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.6, color = "#2E86AB") +
+  labs(title = "Product Embeddings via Truncated SVD",
+       subtitle = "Each point represents a product projected into 2D latent space",
+       x = "SVD Component 1", y = "SVD Component 2") +
+  theme_minimal()
+```
+
+# Why Move to t-SNE?
+
+We now apply **t-SNE** to emphasize local structure—letting true product groups visually emerge.
+
+# Apply t-SNE to SVD-Reduced Data
+
+```{r tsne-reduce}
+# Apply t-SNE to SVD-Reduced Data
+# t-SNE (t-distributed Stochastic Neighbor Embedding) is used to project
+# the high-dimensional SVD embeddings into a 2D space while preserving
+# local neighborhoods, making clusters more apparent.
+
+# Remove duplicate rows from SVD input: t-SNE can struggle if identical points are present.
+svd_2d_unique <- svd_2d[!duplicated(svd_2d), ]
+# Add a small jitter: Ensures each point is unique, preventing computational issues.
+temp_matrix <- jitter(as.matrix(svd_2d_unique), amount = 1e-5)
+
+# Run t-SNE. Perplexity (30) can be thought of as a guess about the number of close neighbors.
+# Theta (0.5) relates to the speed/accuracy trade-off.
+tsne_result <- Rtsne(temp_matrix, perplexity = 30, theta = 0.5, dims = 2)
+
+tsne_df <- data.frame(
+  X = tsne_result$Y[, 1],
+  Y = tsne_result$Y[, 2],
+  # Ensure product names are correctly mapped back to the unique t-SNE points
+  product = colnames(rating_matrix)[!duplicated(svd_2d)]
+)
+
+write_csv(tsne_df, "tsne_coordinates.csv")
+```
+
+# Plot t-SNE Result
+
+```{r plot-tsne}
+ggplot(tsne_df, aes(x = X, y = Y)) +
+  geom_point(alpha = 0.6, color = "#FF6F61") +
+  labs(title = "Product Similarity Map via t-SNE",
+       subtitle = "Each cluster may reflect similar function or ingredient profile",
+       x = "t-SNE X", y = "t-SNE Y") +
+  theme_minimal()
+```
+
+# Evaluate Clustering with k-Means
+
+```{r kmeans-tsne}
+k_clusters <- kmeans(tsne_df[, c("X", "Y")], centers = 5)
+tsne_df$cluster <- as.factor(k_clusters$cluster)
+
+fviz_cluster(k_clusters, data = tsne_df[, c("X", "Y")], geom = "point", labelsize = 6) +
+  ggtitle("K-Means Clustering on t-SNE Embeddings")
+```
+
+# Interpreting Clusters
+
+```{r cluster-products}
+tsne_df %>%
+  group_by(cluster) %>%
+  summarise(products = paste(head(product, 5), collapse = ", ")) %>%
+  kable()
+```
+
+# Clustered Products with Brand Names
+
+```{r cluster-products-brands}
+product_brands <- df %>%
+  distinct(product = product_name_x, brand = brand_name_x)
+
+clustered_products <- tsne_df %>%
+  left_join(product_brands, by = "product") %>%
+  group_by(cluster) %>%
+  summarise(
+    products = paste(head(product, 5), collapse = "; "),
+    brands = paste(unique(brand[!is.na(brand)])[1:5], collapse = "; ")
+  )
+
+kable(clustered_products, caption = "Top 5 Products and Brands per Cluster")
+```
+
+# Compare RMSE from Project 1
+
+```{r rmse-comparison}
+rmse_table <- tribble(
+  ~Model, ~Description, ~RMSE,
+  "Global Average", "Baseline using global mean", 1.237,
+  "Bias-Adjusted (User + Item)", "Accounts for user/item effects", 0.996,
+  "Collaborative Filtering (ALS)", "Latent factors using matrix factorization", 0.879,
+  "Hybrid (Bias + SVD)", "Combined model with better accuracy", 0.812
+)
+
+kable(rmse_table, caption = "RMSE Comparison from Project 1")
+```
+
+# Why We Used This Method
+
+### Why SVD + t-SNE?
+
+We use **Truncated SVD** to generate product embeddings that compress high-dimensional ratings data into a smaller latent space. These embeddings capture patterns in how users rate products—even if two products haven’t been co-rated.
+
+However, SVD alone may not produce intuitive 2D plots. That’s where **t-SNE** comes in: it translates these embeddings into 2D while preserving the local structure—revealing natural clusters and product groupings.
+
+This technique is common in recommender systems to visualize latent structure in data and help identify potential groupings that would be difficult to spot manually.
+
+# Comparison to Kaggle Model (Python)
+
+```markdown
+## Side-by-Side Comparison with Kaggle's Skincare Recommender
+
+We referenced [this Kaggle notebook](https://www.kaggle.com/code/eward96/skincare-recommendation-engine) by **eward96**, who built a skincare recommender in Python. Their approach:
+
+- Applied **TruncatedSVD** to compress user-item matrices
+- Used **t-SNE** to cluster and visualize product similarity
+
+### Key Similarities:
+- Both use matrix factorization (Truncated SVD)
+- Both apply t-SNE for visual pattern discovery
+
+### Key Differences:
+- **Focus:** Our model centers on inclusive clean beauty; theirs is general.
+- **Data:** Ours is filtered for **melanin-rich consumers**; theirs uses broader user data.
+- **Platform:** Our project is done entirely in **R**; theirs in Python (Jupyter Notebook).
+
+### Code Comparison Table
+
+| Step                     | Python (Kaggle)                        | R (This Project)                         |
+|--------------------------|----------------------------------------|------------------------------------------|
+| Import SVD               | `from sklearn.decomposition import TruncatedSVD` | `library(irlba)`                    |
+| Fit SVD                  | `svd.fit_transform(matrix)`            | `irlba(rating_matrix, nv = 50)`         |
+| Run t-SNE                | `TSNE().fit_transform(svd_output)`     | `Rtsne(svd_2d)`                         |
+| Visualize                | `matplotlib.pyplot.scatter(...)`       | `ggplot(...) + geom_point(...)`         |
+```
+
+# Is This Better or Worse Than the Kaggle Model?
+
+## 🔍 Evaluation Criteria
+
+### 1. **Data Relevance & Fairness**
+- **Ours:** Tailored to melanin-rich users and filters products accordingly.
+- **Kaggle:** Generic dataset with no specific demographic filtering.
+✅ Advantage: **Ours**
+
+### 2. **Interpretability**
+- **Ours:** Clear explanations, clusters, RMSE, visualized product groups.
+- **Kaggle:** Good visuals but fewer interpretive layers.
+✅ Advantage: **Ours**
+
+### 3. **Technical Depth**
+- **Ours:** RMSE, matrix factorization, clustering, hybrid suggestions.
+- **Kaggle:** SVD + t-SNE, but no error metrics or hybrid testing.
+✅ Advantage: **Ours**
+
+### 4. **Performance Metrics**
+- **Ours:** RMSE as low as **0.812**.
+- **Kaggle:** No RMSE reported.
+✅ Advantage: **Ours**
+
+### 5. **Transparency**
+- **Ours:** Modular RMarkdown with clear GitHub linkage.
+- **Kaggle:** Jupyter, limited reproducibility or references.
+✅ Advantage: **Ours**
+
+### Final Verdict:
+The Kaggle project sparked this work—but this implementation goes further with fairness, technical rigor, and interpretability.
+
+# References & Source Attribution
+
+### 📁 Kaggle Reference:
+- [eward96's Skincare Recommender](https://www.kaggle.com/code/eward96/skincare-recommendation-engine) — original Python recommender that inspired this dimensionality reduction comparison.
+
+### 💾 GitHub Repositories for Project Series:
+- [Project 1: Bias-Aware Collaborative Filtering](https://github.com/SheriannMc/CleanBeauty-Recommender-Project1)
+- [Project 2: Rule-Based Recommender with Safety Filters](https://github.com/SheriannMc/CleanBeauty-Recommender-Project2)
+- [Project 3: Dimensionality Reduction](https://github.com/SheriannMc/CleanBeauty-Recommender-Project3)
+
+# Conclusion & Next Steps
+
+Dimensionality reduction gives us new tools to see structure where it might be hidden. By combining SVD and t-SNE, we’re able to map out a cleaner, more inclusive skincare space.
+
+### Next Steps
+- Label clusters by product type or function (e.g., toner, serum, moisturizer)
+- Test cosine similarity before t-SNE to validate relationships
+- Blend SVD with collaborative filtering in hybrid models
+
+These steps aim to better serve melanin-rich users and build an intelligent beauty recommender that reflects real user experience and safety.
