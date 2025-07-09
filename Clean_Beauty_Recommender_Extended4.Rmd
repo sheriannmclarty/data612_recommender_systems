@@ -1,0 +1,276 @@
+---
+title: 'Clean Beauty Recommender Project 4: Business Proposal for Safer & Inclusive
+  Recommendations'
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    theme: cosmo
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(knitr)
+library(recommenderlab)
+library(Matrix)
+library(DT)
+set.seed(2025)
+```
+
+# Executive Summary: The Big Picture
+Imagine a beauty website that wants to recommend products to its customers—especially Black women and people with rich, dark skin tones. This group is often overlooked in beauty algorithms or suggested products that aren't safe or suitable.
+
+This project explores two recommendation models, not just by how "accurate" they are, but by how well they serve real people. Our goal is to create a safer, fairer, and more effective experience for these underserved consumers.
+
+# Project Overview: Our Mission and Our Tools
+
+## Objective
+To build a recommendation system that helps customers with medium to deep skin tones find products that are:
+
+- **Safe**: Won't cause reactions or irritation.
+- **Fair**: Don't unintentionally exclude or ignore certain groups.
+- **Effective**: Actually work well for their skin.
+
+We tested:
+- **Collaborative Filtering (CF)**: "People like you also liked..."
+- **Rule-Based Filtering**: Ethical, skin-safe rules to pre-screen products
+
+# Methodology: How We Got Here
+
+## Step-by-Step
+
+1. **Cleaned the Data**: Filtered reviews, ratings, and ingredients. We focused on skin tone, product names, and star ratings.
+2. **Collaborative Filtering (CF)**: Built a matrix of users vs. products with their ratings. It works best when there’s overlap—when users rate the same items.
+3. **Rule-Based Recommender**: Applied ethical logic to pick top-rated products mentioned by users with medium to deep skin tones and filtered out reviews mentioning "rash," "burn," or other red-flag terms.
+4. **Problem We Hit**: Our rule-based filter was too strict. Only 10 products made the cut. Most users hadn’t rated them, so Collaborative Filtering broke—literally. We got NaN (Not a Number) when calculating accuracy.
+5. **Fixing It**: We expanded to the top 30 products and allowed the model to work even when users rated only one item (`given = 1`).
+
+This let our system breathe. Collaborative Filtering had more data to learn from, and our ethical filters still shaped the product list.
+
+## Load Ratings and Filtered Dataset
+
+```{r load-data, message=TRUE, warning=TRUE}
+df <- read_csv("filtered_skintone_reviews_r.csv")
+
+ratings_df <- df %>%
+  select(user = author_id, product = product_name_x, rating = rating_x) %>%
+  filter(!is.na(user), !is.na(product), !is.na(rating)) %>%
+  mutate(user = factor(user), product = factor(product))
+```
+
+## Create RealRatingMatrix for CF Model
+
+```{r create-matrix, message=TRUE}
+rating_matrix <- sparseMatrix(
+  i = as.integer(ratings_df$user),
+  j = as.integer(ratings_df$product),
+  x = ratings_df$rating,
+  dimnames = list(levels(ratings_df$user), levels(ratings_df$product))
+)
+
+data_rrm <- new("realRatingMatrix", data = rating_matrix)
+```
+
+## Collaborative Filtering Recommender
+
+```{r build-cf-model}
+cf_model <- Recommender(data_rrm[1:min(500, nrow(data_rrm))], method = "UBCF")
+cf_predictions <- predict(cf_model, data_rrm[501:min(510, nrow(data_rrm))], n = 5)
+cf_recs <- as(cf_predictions, "list")
+```
+
+## Rule-Based Recommender (Ethical Filtering)
+
+```{r rule-recs}
+rule_based_recs <- df %>%
+  filter(!is.na(rating_x), rating_x >= 4,
+         !is.na(review_text),
+         str_detect(skin_tone, regex("medium|dark|tan", ignore_case = TRUE)),
+         !str_detect(tolower(review_text), "burn|rash|sting")) %>%
+  group_by(product_name_x, brand_name_x) %>%
+  summarise(avg_rating = mean(rating_x), reviews = n(), .groups = 'drop') %>%
+  arrange(desc(avg_rating), desc(reviews)) %>%
+  slice(1:30)  # Expanded from top 10 to top 30 to increase overlap for CF
+```
+
+---
+
+# Model Outputs: What We Got
+
+## Collaborative Filtering (CF)
+Tailored lists like: "You liked A and B, so you may like C."
+
+## Rule-Based Filtering
+A curated set of high-rated, skin-tone-conscious products—free of reviews that mention burns or rashes. Think of this as a product spotlight for safety and inclusivity.
+
+```{r cf-table}
+if (length(cf_recs) > 0 && all(lengths(cf_recs) > 0)) {
+  cf_recs_df <- tibble(
+    user = rep(names(cf_recs), lengths(cf_recs)),
+    rank = sequence(lengths(cf_recs)),
+    recommendation = unlist(cf_recs)
+  ) %>%
+    pivot_wider(names_from = rank, values_from = recommendation, names_prefix = "Top_")
+
+  kable(cf_recs_df, caption = "Top 5 Product Recommendations by User (Collaborative Filtering)", booktabs = TRUE)
+} else {
+  kable(data.frame(Message = "No recommendations available for selected users. Please adjust the input range."), caption = "Collaborative Filtering Output")
+}
+```
+
+## Rule-Based Recommendations
+
+```{r rule-table}
+kable(rule_based_recs, caption = "Top 10 Ethically-Filtered Products for Melanin-Rich Consumers")
+```
+
+---
+
+# Accuracy & Trade-offs: Why We Changed the Rules
+
+We care about more than just the RMSE number. Accuracy should never come at the expense of safety.
+
+Originally:
+- Rule-based filtering selected **top 10** products.
+- CF had **too little overlap** to work well. The result? NaN errors and zero RMSE.
+
+Now:
+- We use **top 30** products.
+- We lowered `given = 2` to `given = 1`.
+
+## RMSE Comparison from Project 1
+
+```{r rmse-results}
+rmse_table <- tribble(
+  ~Model, ~Description, ~RMSE,
+  "Global Average", "Baseline using global mean", 1.237,
+  "Bias-Adjusted (User + Item)", "Accounts for user/item effects", 0.996,
+  "Collaborative Filtering (ALS)", "Latent factors using matrix factorization", 0.879,
+  "Hybrid (Bias + SVD)", "Combined model with better accuracy", 0.812
+)
+kable(rmse_table, caption = "RMSE Comparison from Project 1")
+```
+
+## Post-Filtering RMSE Analysis (on actual data_rrm)
+
+_We modified the rule-based filtering to select the top 30 products instead of the top 10. Why? Because the original slice(1:10) was too restrictive—most users had rated only one product, making it impossible for collaborative filtering to evaluate with `given = 2`. We also adjusted the evaluation scheme to use `given = 1` to accommodate the sparse nature of the filtered dataset. This helps us still get an approximate RMSE without excluding the majority of users._
+
+```{r filtered-cf-rmse, message=TRUE}
+tryCatch({
+  cat("Total users:", length(unique(ratings_df$user)), "\n")
+  cat("Total products:", length(unique(ratings_df$product)), "\n")
+  cat("Filtered product count:", length(unique(rule_based_recs$product_name_x)), "\n")
+
+  filtered_ratings <- ratings_df %>%
+    filter(product %in% rule_based_recs$product_name_x) %>%
+    mutate(user = factor(user), product = factor(product))
+
+  cat("Filtered ratings:", nrow(filtered_ratings), "\n")
+  cat("Users in filtered ratings:", length(unique(filtered_ratings$user)), "\n")
+  cat("Products in filtered ratings:", length(unique(filtered_ratings$product)), "\n")
+
+  user_ids <- as.integer(filtered_ratings$user)
+  product_ids <- as.integer(filtered_ratings$product)
+
+  filtered_matrix <- sparseMatrix(
+    i = user_ids,
+    j = product_ids,
+    x = filtered_ratings$rating,
+    dims = c(length(levels(filtered_ratings$user)), length(levels(filtered_ratings$product))),
+    dimnames = list(levels(filtered_ratings$user), levels(filtered_ratings$product))
+  )
+
+  filtered_rrm <- new("realRatingMatrix", data = filtered_matrix)
+
+  cat("Matrix dims (users x products):", dim(filtered_rrm), "\n")
+  cat("User counts summary:\n"); print(summary(rowCounts(filtered_rrm)))
+  cat("Product counts summary:\n"); print(summary(colCounts(filtered_rrm)))
+
+  user_counts <- rowCounts(filtered_rrm)
+  item_counts <- colCounts(filtered_rrm)
+  enough_ratings <- which(user_counts >= 2 & item_counts >= 2)
+
+  if (length(enough_ratings) >= 10) {
+    filtered_rrm_valid <- filtered_rrm[enough_ratings, ]
+    scheme <- evaluationScheme(filtered_rrm_valid, method = "split", train = 0.8, given = 1)  # Changed to given = 1 because most users only have 1 rating
+    filtered_cf_model <- Recommender(getData(scheme, "train"), method = "UBCF")
+    filtered_pred <- predict(filtered_cf_model, getData(scheme, "known"), type = "ratings")
+
+    if (all(is.na(as(filtered_pred, "matrix")))) cat("⚠️ No predictions made!\n")
+    if (nratings(getData(scheme, "unknown")) == 0) cat("⚠️ No unknown ratings available for evaluation!\n")
+
+    filtered_rmse <- calcPredictionAccuracy(filtered_pred, getData(scheme, "unknown"))
+    print(filtered_rmse)
+
+    if (is.finite(filtered_rmse["RMSE"])) {
+      filtered_rmse_val <- round(filtered_rmse["RMSE"], 3)
+    } else {
+      filtered_rmse_val <- NA
+    }
+
+    kable(
+      data.frame(Model = "CF After Rule-Based Filtering", RMSE = filtered_rmse_val),
+      caption = "Filtered CF Model Accuracy"
+    )
+  } else {
+    kable(data.frame(Message = "Not enough users and items with sufficient ratings for CF evaluation."), caption = "Filtered CF Model Accuracy")
+  }
+}, error = function(e) {
+  kable(data.frame(Message = paste("Error during RMSE calculation:", e$message)), caption = "Filtered CF Model Accuracy")
+})
+```
+
+---
+
+# Strategic Comparison
+
+| Criteria        | Collaborative Filtering | Rule-Based Recommender |
+|----------------|--------------------------|-------------------------|
+| **Personalization** | ✅ Strong                    | 🚫 Absent               |
+| **Safety-aware**    | ⚠️ None                     | ✅ Strong               |
+| **Fairness**        | ⚠️ Bias risk                | ✅ Ethical filters      |
+| **Serendipity**     | ⚠️ Similarity-heavy         | ✅ Safer diversity      |
+| **Diversity**       | ⚠️ Skewed to popular items  | ✅ Filtered variety     |
+| **Popularity Bias** | ✅ Yes                     | ✅ Reduced              |
+| **Data-Driven**     | ✅ Quantified               | ✅ Filter logic         |
+| **Actual Product Recs** | ✅ Yes               | ✅ Yes                  |
+
+---
+
+# Online Evaluation Possibilities
+
+## Experiments to Run:
+- A/B Test: Compare rule-based only vs hybrid vs CF.
+- Log behavior: Click-through rates, time-on-page, wishlist.
+- Survey: Ask users about relevance, usefulness, safety.
+
+## Environment Design:
+A live test platform (sandbox-style) randomly assigns users to different recommendation strategies. Engagement, satisfaction, and retention are tracked and compared across groups.
+
+---
+
+# Final Recommendation
+
+We propose a **hybrid recommender architecture**:
+
+- **Filter first** using rule-based logic to ensure product safety and relevance for melanin-rich skin.
+- **Then personalize** using collaborative filtering within that safe product pool.
+
+This balances ethics and accuracy while addressing real consumer needs.
+
+---
+# References
+- [Project 1 GitHub](https://github.com/sheriannmclarty/data612_recommender_systems/tree/Project-1)  
+- [Project 2 GitHub](https://github.com/sheriannmclarty/data612_recommender_systems/tree/Project-2)  
+- [Project 3 GitHub](https://github.com/sheriannmclarty/data612_recommender_systems/tree/Project-3)  
+- [Project 4 GitHub](https://github.com/sheriannmclarty/data612_recommender_systems/tree/Project-4)  
+- [Stanford Recommender Materials](https://web.stanford.edu/class/cs246/)  
+- Ricci, Rokach, & Shapira (2015). *Recommender Systems Handbook*.  
+- Burke, R. (2007). *Hybrid Recommender Systems: Survey and Experiments*. *User Modeling and User-Adapted Interaction*.  
+- Ekstrand, J., Riedl, J., & Konstan, J. (2011). *Collaborative Filtering Recommender Systems*.
+
