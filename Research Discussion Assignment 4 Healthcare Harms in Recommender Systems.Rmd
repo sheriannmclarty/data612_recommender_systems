@@ -1,0 +1,104 @@
+---
+title: 'Research Discussion Assignment 4: Healthcare Harms in Recommender Systems'
+author: "Sheriann McLarty"
+date: "`r Sys.Date()`"
+output:
+  pdf_document:
+    toc: true
+  html_document:
+    toc: true
+    toc_float: true
+    number_sections: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+```
+
+# When My Health Became an Algorithm's Casualty
+
+Let me keep it real, I did everything right. I took my prenatal vitamins. I followed my provider’s instructions. I asked questions. I showed up to my appointments. And still, I ended up being diagnosed with postpartum preeclampsia, a terrifying, life-altering condition that almost took me out after delivery. 
+
+So, when I went online searching for support "natural remedies for postpartum recovery" I wasn’t looking to reject medicine. I was looking for relief. And YouTube? Pinterest? Instagram? They gave me detox tea influencers, sketchy fertility “gurus,” and eventually, straight-up anti-vax conspiracies. The deeper I scrolled, the worse it got. 
+
+I didn’t realize it at the time, but I was in the middle of what Renée DiResta described in *Up Next: A Better Recommendation System*—an algorithmic spiral. And if someone like me data-savvy, medically aware, and actively seeking support could get caught up in it, imagine what’s happening to everyone else.
+
+# The Articles Hit Different When You’ve Lived It
+
+## DiResta's Algorithmic Spiral
+
+DiResta spells out how engagement-based recommender systems are designed to feed us more of whatever holds our attention even if it’s dangerous. She recommends adding friction, tagging unsafe topics with "Do Not Amplify," and offering users off-ramps like Project Redirect. I don’t just agree, I needed those features. Where were they when I was up at 3AM Googling “swelling after childbirth” with my heart racing and a newborn crying in the background?
+
+## Tufekci’s YouTube Warning
+
+Zeynep Tufekci nailed it in *YouTube, the Great Radicalizer*: the algorithm isn’t malicious it’s just incredibly efficient at keeping people watching. And what keeps people watching? Extremes. Shock. Fear. That’s why someone searching for healing ends up in anti-science territory. The algorithm isn’t just misfiring it’s optimized for chaos. And when the chaos is health-related, it’s deadly.
+
+## Krishnan et al. and the Bias We Don’t See
+
+Then there’s the subtler stuff like what Krishnan and his co-authors unpack. When platforms show users the average score of a product or article, users tend to conform. That’s social influence bias. And in health spaces, this means the most “popular” content might not be the most accurate it’s just the loudest. If biased wellness junk goes viral, the algorithm keeps pushing it, drowning out marginalized voices and medically accurate alternatives.
+
+# So How Do We Fix This?
+
+## 1. Shift What We Reward
+
+Instead of optimizing for clicks or views, recommender systems should prioritize:
+- **Credibility**: Verified medical sources and culturally competent care content
+- **Diversity**: Not just what’s trending in dominant communities
+- **Harm reduction**: Not showing content that’s flagged as misleading or dangerous
+
+## 2. Mix in Safer Content by Default
+
+A recommender system can and should interrupt spirals. Here's a simulated example:
+
+```{r example_recommender_tweak}
+set.seed(52086)
+
+user_view <- c("natural_remedy", "detox", "vaccine_concern")
+default_recs <- c("homeopathy", "essential oils", "vaccine_myths")
+factual_recs <- c("CDC vaccine safety", "OBGYN interview", "Postpartum care video")
+
+injected <- if (runif(1) < 0.2) {
+  sample(factual_recs, 1)
+} else {
+  sample(default_recs, 1)
+}
+
+paste("Recommended next video:", injected)
+```
+
+It’s basic, but the point is: even a 20% chance of breaking the cycle with credible info can save lives.
+
+## 3. Give People Control
+
+Let users adjust their feed settings. I’d love a mode that says:
+- “I want peer-reviewed health info only”
+- “Balance my feed with opposing viewpoints”
+- “Don’t show me clickbait wellness junk ever again”
+
+## 4. Expose & Correct Bias
+
+Adapt Krishnan’s methods track how ratings shift after users see others opinions. Use that insight to reweigh ratings so that truly helpful content doesn’t get buried by trend bias. Especially important for platforms serving Black maternal health or mental health communities.
+
+## 5. Bake in Health Equity
+
+Data scientists, we need to stop pretending health misinformation is just a content problem. It’s a design problem. Train your models on:
+- Culturally specific care narratives
+- Multilingual sources
+- Medical content that includes people with diverse skin tones, genders, and symptoms
+
+# Final Word
+
+I’m still living with the effects of preeclampsia. It changed my body, it changed my anxiety levels, and it changed the way I search for answers online. What I needed most in that moment wasn’t another Tiktoker selling womb tea it was guidance, truth, and care.
+
+> Algorithms are powerful. But if we don’t shape them intentionally, they’ll keep shaping us especially when we’re vulnerable.
+
+And that’s a risk public health can’t afford.
+
+---
+
+# References
+
+- DiResta, R. (2018). *Up Next: A Better Recommendation System*. Wired.  
+- Tufekci, Z. (2018). *YouTube, the Great Radicalizer*. The New York Times.  
+- Krishnan, S., Patel, J., Franklin, M., & Goldberg, K. (n.d.). *Social Influence Bias in Recommender Systems*.
