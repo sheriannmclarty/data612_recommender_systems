@@ -1,0 +1,105 @@
+Project 6: Clean Beauty Recommender API (Bias-Adjusted)
+
+I built a recommender system for clean beauty products using bias-adjusted ratings, combining:
+
+User and item bias modeling
+
+Brand and product metadata integration
+
+A working Flask API endpoint
+
+Local test script for real-time recommendations
+
+Components
+1. Model Script (project1_bias_adjusted_model.py)
+Loads and cleans the filtered_skintone_reviews.csv dataset
+
+Encodes user and item columns
+
+Computes global average, user bias, and item bias
+
+Defines BiasAdjustedRecommender class
+
+Adds recommend() method for unseen items
+
+Creates and saves:
+
+with open("project1_model.pkl", "wb") as f:
+    pickle.dump((model, item_to_meta), f)
+2. Flask API (project6_api.py)
+Loads the filtered_skintone_reviews.csv
+
+Loads the saved .pkl file with model and metadata
+
+Verifies model object is valid
+
+Defines /recommend POST route:
+
+json
+
+{
+  "user_id": 101,
+  "top_n": 5
+}
+Returns a list of recommended products with:
+
+item (numeric code)
+
+predicted_rating (float)
+
+product_name
+
+brand_name
+
+3. Test Script (test_api_request.py)
+Converts a real author_id into encoded user_id
+
+Sends POST request to the Flask server
+
+Parses and prints JSON results
+
+Example Output:
+
+json
+
+{
+  "recommendations": [
+    {
+      "item": 14,
+      "predicted_rating": 1.63,
+      "product_name": "10% Niacinamide Booster",
+      "brand_name": "Paula's Choice"
+    },
+    ...
+  ]
+}
+🧪 Execution Order
+Train + Save Model
+
+Run: project1_bias_adjusted_model.py
+
+Output: project1_model.pkl
+
+Launch Flask API
+
+Run: project6_api.py
+
+Server will start at: http://127.0.0.1:5000
+
+Send Request
+
+Run: test_api_request.py
+
+View response with product + brand names
+
+Deliverables
+project1_bias_adjusted_model.py
+
+project6_api.py
+
+test_api_request.py
+
+project1_model.pkl
+
+filtered_skintone_reviews.csv
+
